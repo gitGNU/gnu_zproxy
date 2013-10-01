@@ -574,7 +574,7 @@ function usage {
 	echo -e "$prog [OPZIONI]
 
 \e[1mOpzioni:\e[0m
--h,	--help		      Manuale di ZigzagDownLoader (ZDL)
+-h,	--help		      Manuale di ZigzagProxy
 
 -ip                           Indirizzo IP attuale
 

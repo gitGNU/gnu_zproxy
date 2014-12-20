@@ -123,6 +123,8 @@ function print_c {
 	3)
 	    echo -n -e '\e[1;31m' #rosso
 	    ;;	
+	4)
+	    echo -n -e "$BBlue"
     esac
     echo -n -e "$2\n"
     echo -n -e "${Color_Off}"
@@ -215,6 +217,7 @@ function zclock {
 
 
 ## INIT
+declare -A list_proxy_url
 
 function init {
     PROG=`echo $prog | tr a-z A-Z`
@@ -225,8 +228,9 @@ function init {
     max_waiting=40
     
     url_update="http://inventati.org/zoninoz/html/upload/files/zproxy"
-    proxy_server="proxy_list"
-    list_proxy_url["ip_adress"]="http://www.ip-adress.com/proxy_list/"
+
+    proxy_server="ip_adress"
+    list_proxy_url["ip_adress"]="http://zoninoz.hostoi.com" #www.ip-adress.com/proxy_list/"
     list_proxy_url["proxy_list"]="http://proxy-list.org/en/index.php"
 
     ck_proxy_url="http://inventati.org/zoninoz/html/index.php"
@@ -374,50 +378,20 @@ function _firefox {
     done
 }
 
-# function update_proxy {
-# 	
-# 	unset http_proxy
-# 	print_c 1 "Aggiorna proxy $proxy_type"
-# 	
-# 	rm -f "$path_prog/proxy.tmp"
-# 	
-# 	wget --user-agent="anonimo"  http://www.ip-adress.com/proxy_list/ -O "$path_prog/proxy.tmp" -q
-# 	
-# 	#### tipi di proxy: Anonymous Transparent Elite
-# 	
-# 	less "$path_prog/proxy.tmp"|grep "Proxy_Details" |grep $proxy_type >"$path_prog/proxy2.tmp"
-# 	
-# 	max=`wc -l "$path_prog/proxy2.tmp" | awk '{ print($1) }'`
-# 	max=$(( $max+1 ))
-# 	j=1
-# 		
-# 	while [ $j != $max ]; do
-# 		line=`cat "$path_prog/proxy2.tmp" |sed -n "${j}p"`
-# 		proxy=${line#*Proxy_Details\/}
-# 		proxy="${proxy%:${proxy_type}*}"
-# 		touch "$path_prog/proxy_${proxy_type}.txt"
-# 		exist=`cat "$path_prog/proxy_${proxy_type}.txt" |grep $proxy 2>/dev/null`
-# 		[ -z "$exist" ] && echo "$proxy" |tee -a "$path_prog/proxy_${proxy_type}.txt"
-# 		#[ $j = 1 ] && newproxy=$proxy
-# 		(( j++ ))
-# 	done
-# 	
-# 	rm -f "$path_prog"/*.tmp
-# 	echo
-# }
-
 function noproxy {
     unset http_proxy
     export http_proxy
 }
 
+
+## servizi che offrono liste di proxy
 function ip_adress {
     ## ip-adress.com
     
     for proxy_type in ${proxy_types[*]}; do
-	less "$path_prog/proxy.tmp"|grep "Proxy_Details" |grep "${proxy_type}" >> "$path_prog/proxy2.tmp"
+	cat "$path_prog/proxy.tmp"|grep "Proxy_Details" |grep "${proxy_type}" >> "$path_prog/proxy2.tmp"
     done
-    
+
     max=`wc -l "$path_prog/proxy2.tmp" | awk '{ print($1) }'`
     
     string_line=`cat "$path_prog/proxy2.tmp" |sed -n "${line}p"`
@@ -431,19 +405,18 @@ function ip_adress {
 
 function proxy_list {
     ## proxy-list.org
-    
-    proxy_tmp=$( cat "$path_prog/proxy.tmp" |grep "ago" )
-    proxy_tmp=${proxy_tmp//"</tr>"/"\n"}
     for proxy_type in ${proxy_types[*]}; do
-	echo -e "$proxy_tmp" |grep "${proxy_type}" >> "$path_prog/proxy2.tmp"
+	html=$(cat  "$path_prog/proxy.tmp" | grep -B 4 "${proxy_type}" |grep class)
     done
-    max=`wc -l "$path_prog/proxy2.tmp" | awk '{ print($1) }'`
-    
-    string_line=`cat "$path_prog/proxy2.tmp" |sed -n "${line}p"`
+    n=$(( $(wc -l <<< "$html")/4 ))
+    proxy_type=$(sed -n $(( ${line}*4 ))p <<< "$html")
+    proxy_type="${proxy_type%%'</'*}"
+    proxy_type="${proxy_type##*>}"
 
-    proxy="${string_line#*'<td>'}"
-    proxy="${proxy%%'</td>'*}"
-}			
+    proxy=$(sed -n $(( ${line}*4-3 ))p <<< "$html")
+    proxy="${proxy#*proxy\">}"
+    proxy="${proxy%<*}"
+}
 
 function update_proxy {
     maxspeed=0
@@ -464,13 +437,12 @@ function update_proxy {
 	noproxy
 	line=1
 	while [ -z "$proxy" ] ; do		
-			#rm -f "$path_prog/proxy.tmp"
 	    if [ ! -f "$path_prog/proxy.tmp" ]; then
-		wget -q -t 1 -T 20 --keep-session-cookies --save-cookies=$path_prog/cookies.zdl --user-agent="Anonimo" "${list_proxy_url[${proxy_server}]}" -O "$path_prog/proxy.tmp" &>/dev/null
-		rm -f "$path_prog/proxy2.tmp"
+		wget -q -t 1 -T 20 --post-data="cmd=pr0xylist" --user-agent="Anonimo" ${list_proxy_url[$proxy_server]} -O "$path_prog/proxy.tmp" &>/dev/null
+		print_c 4 "Ricerca lista proxy $proxy_server: ${list_proxy_url[$proxy_server]}"
 	    fi
-	    
-	    $proxy_server
+	    rm -f "$path_prog/proxy2.tmp"
+	    [ -f "$path_prog/proxy.tmp" ] && $proxy_server
 	    
 	    z=$(( ${#proxy_done[*]}-1 ))
 	    if (( $z<0 )) || [ "$z" == "" ]; then z=0 ; fi
@@ -482,12 +454,12 @@ function update_proxy {
 	    done
 	    
 	    if [ "$string_line" == "" ]; then
-		echo -n -e "|"
+		#echo -n -e "|"
 		sleep 3
 		(( search_proxy++ ))
 		[ $search_proxy == 100 ] && print_c 3 "Finora nessun proxy disponibile: tentativo con proxy disattivato" && noproxy && close=true && break
 	    fi
-	    if [ $line == $max ] || [ "$string_line" == "" ]; then
+	    if [ "$line" == "$max" ] || [ "$string_line" == "" ]; then
 		rm -f "$path_prog/proxy.tmp"
 		line=0
 	    fi
@@ -562,8 +534,6 @@ function update_prog {
     wget -T $max_waiting "$url_update" -O /tmp/$prog 
     print_c 1 "Installazione di $PROG in /usr/local/bin/"
     ( mv /tmp/$prog /usr/local/bin/$prog ; chmod +x /usr/local/bin/$prog ; print_c 1 "Aggiornamento completato." ) || ( sudo mv /tmp/$prog /usr/local/bin/$prog ; sudo chmod +x /usr/local/bin/$prog ; print_c 1 "Aggiornamento completato." ) || ( echo -n "(Root)" ; su -c "mv /tmp/$prog /usr/local/bin/$prog ; chmod +x /usr/local/bin/$prog" ; print_c 1 "Aggiornamento completato." ) || ( print_c 3 "Aggiornamento automatico non riuscito" )
-	#echo "which ${prog}:"
-	#which $prog
     echo
 }
 

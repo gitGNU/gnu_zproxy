@@ -230,7 +230,7 @@ function init {
     url_update="http://inventati.org/zoninoz/html/upload/files/zproxy"
 
     proxy_server="ip_adress"
-    list_proxy_url["ip_adress"]="http://zoninoz.hostoi.com" #www.ip-adress.com/proxy_list/"
+    list_proxy_url["ip_adress"]="http://zoninoz.hol.es" #www.ip-adress.com/proxy_list/"
     list_proxy_url["proxy_list"]="http://proxy-list.org/en/index.php"
 
     ck_proxy_url="http://inventati.org/zoninoz/html/index.php"
